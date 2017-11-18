@@ -43,6 +43,11 @@ contract InsuranceContract {
         int256 balance
     );
 
+    event WithdrawCustomer (
+        address customer,
+        int balance
+    );
+
     event InsuranceTransaction (
         address customer,
         int256 tokens,
@@ -62,25 +67,27 @@ contract InsuranceContract {
     );
 
     modifier ifFunds(address _to, int tokens) {
-        if (customers[msg.sender].balance <= tokens) {
-            FailedTransaction(msg.sender, _to, tokens);
-            throw;
-        }
+        require(customers[msg.sender].balance >= tokens);
         _;
     }
 
-    function InsuranceContract() {
+    modifier ifInsuranceOwnerCalling() {
+        require(msg.sender == insuranceOwner);
+        _;
+    }
+
+    function InsuranceContract() public {
         counter = 0;
         insuranceOwner = msg.sender;
         customers[insuranceOwner].balance = 100000;
     }
 
-    function getBalance(address _user) constant returns (int _balances) {
+    function getBalance(address _user) public constant returns (int _balances) {
         return customers[_user].balance;
     }
 
     /* When a customer buys insurance, we topup his acount with those number of tokens */ //todo: modifier onlyInsurance
-    function registerCustomer(address _customer, int _tokens, uint _crashFreeYears, uint _age) ifFunds(_customer, _tokens) returns (bool success, address customer) {
+    function registerCustomer(address _customer, int _tokens, uint _crashFreeYears, uint _age) ifInsuranceOwnerCalling() ifFunds(_customer, _tokens) public returns (bool success, address customer) {
         DriverCategory dCat;
         uint premium;
         (dCat, premium) = determineDriverCategoryAndAmount(_crashFreeYears, _age);
@@ -94,7 +101,7 @@ contract InsuranceContract {
     }
 
     /* Deduct insurance tokens based upon the score & driver category */ //todo: modifier onlyInsurance
-    function deductInsurance(address _customer, uint _score) returns (bool) {
+    function deductInsurance(address _customer, uint _score) ifInsuranceOwnerCalling() public returns (bool) {
         // calculate tokens to deduct based on the score
         int amountToPay = customers[_customer].balance + calculatePenaltyFromScore(_score);
         if (customers[_customer].balance >= amountToPay && customers[_customer].state == InsuranceState.ACTIVE ) {
@@ -110,7 +117,7 @@ contract InsuranceContract {
     }
 
     /* topup account if balance low or zero */ //todo: modifier onlyInsurance
-    function topupAccount(address _customer, int tokens) returns (bool, int) {
+    function topupAccount(address _customer, int tokens) ifInsuranceOwnerCalling() public returns (bool, int) {
         if (customers[_customer].state != InsuranceState.WITHDRAWN ) {
             customers[msg.sender].balance -= tokens;
             customers[_customer].balance += tokens;
@@ -121,12 +128,17 @@ contract InsuranceContract {
         }
     }
 
-    function generateAddress(uint _id) internal returns (bytes32 a) {
-        return keccak256(_id);
-    }
-
-    function getID() internal returns(uint) { 
-        return ++counter; 
+    function withdraw(address _customer) ifInsuranceOwnerCalling() public returns (bool, int) {
+        if (customers[_customer].state != InsuranceState.WITHDRAWN) {
+            customers[_customer].state = InsuranceState.WITHDRAWN;
+            int currentBalanceBeforeWithdraw = customers[_customer].balance;
+            customers[insuranceOwner].balance += currentBalanceBeforeWithdraw;
+            customers[_customer].balance = 0;
+            return (true, currentBalanceBeforeWithdraw);
+            WithdrawCustomer(_customer, currentBalanceBeforeWithdraw);
+        } else {
+            return (false, 0);
+        }
     }
 
     function determineDriverCategoryAndAmount(uint crashFreeYears, uint ageOfDriver) internal pure returns (DriverCategory cat, uint insuranceAmount) {
@@ -149,15 +161,31 @@ contract InsuranceContract {
             return -2; // pay less because you drove good.
         }
     }
+
+    /* Util functions */
+    
+    function generateAddress(uint _id) internal pure returns (bytes32 a) {
+        return keccak256(_id);
+    }
+
+    function getID() internal returns(uint) { 
+        return ++counter; 
+    }
 }
 
 /* TODOS:
  - withdraw insurance
  - changeCategory() // based on crash
+ - any possibility of getting rid of _customer address in calls?
 
-- implement tiers of payment. 0-35, 35-70, >70
+ - update crashFreeYears & Category of driver based on history
+ - optimize
+ - add modifier for insuranceOwnerCalls only
+
+DONE
+- implement tiers of payment for score. 0-35, 35-70, >70
     -factor of 2.
-- category of driver
+- category of driver & diff pricing
 - determine amount to charge based on score
 
 */
