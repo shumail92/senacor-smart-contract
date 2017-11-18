@@ -72,8 +72,8 @@ contract InsuranceContract {
     }
 
     /* When a customer buys insurance, we topup his acount with those number of tokens */
-    function buyInsurance(uint _value) ifFunds(_customer, _value) returns (bool success, address customer) {
-        address _customer = generateAddress(getID());
+    function buyInsurance(address _customer, uint _value) ifFunds(_customer, _value) returns (bool success, address customer) {
+        // address _customer = generateAddress(getID());
         customers[msg.sender].balance -= _value;
         customers[_customer].balance += _value;
         customers[_customer].state = InsuranceState.CREATED;
@@ -95,33 +95,22 @@ contract InsuranceContract {
         }
     }
 
-    function topupAccount(address _customer, uint _value) returns (uint) {
-        customers[msg.sender].balance -= _value;
-        customers[_customer].balance += _value;
-        TopupAccount(_customer, _value);
-        return customers[_customer].balance;
+    /* topup account if balance low or zero */
+    function topupAccount(address _customer, uint _value) returns (bool, uint) {
+        if (customers[_customer].state != InsuranceState.WITHDRAWN ) {
+            customers[msg.sender].balance -= _value;
+            customers[_customer].balance += _value;
+            TopupAccount(_customer, _value);
+            return (true, customers[_customer].balance);
+        } else {
+            return (false, customers[_customer].balance);
+        }
+        
     }
 
-    function generateAddress(uint _id) returns (address a) {
-        return bytesToAddress(keccak256(_id));
+    function generateAddress(uint _id) returns (bytes32 a) {
+        return keccak256(_id);
     }
-
-    function bytesToAddress (bytes b) constant returns (address) {
-    uint result = 0;
-    for (uint i = 0; i < b.length; i++) {
-        uint c = uint(b[i]);
-        if (c >= 48 && c <= 57) {
-            result = result * 16 + (c - 48);
-        }
-        if (c >= 65 && c <= 90) {
-            result = result * 16 + (c - 55);
-        }
-        if (c >= 97 && c <= 122) {
-            result = result * 16 + (c - 87);
-        }
-    }
-    return address(result);
-}
 
     function getID() returns(uint) { 
         return ++counter; 
@@ -129,8 +118,5 @@ contract InsuranceContract {
 }
 
 /* TODOS:
- - topup function
- - generate address automatically by ID
- - add check for enough balance & change insurance state
-
+ - withdraw insurance
 */
