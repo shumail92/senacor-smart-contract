@@ -240,6 +240,7 @@ contract InsuranceContract {
 }
 
 /* TODOS:
+ - insuranceowner should be able to update value of token
  - put mistakes on chain ?
  - changeCategory() // based on crash
  - optimize
