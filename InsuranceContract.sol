@@ -1,6 +1,6 @@
 /*
     Example Smart Contract for Insurance
-    @author Shumail Mohyuddin 
+    @author Shumail Mohyuddin
  */
 
 pragma solidity ^0.4.0;
